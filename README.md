@@ -43,7 +43,7 @@ env repository: contains the manifests for the Kubernetes Deployment
    ```
    export PROJECT_ID=$(gcloud config get-value project)
    export PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format='value(projectNumber)')
-   export REGION=us-west1
+   export REGION=us-central1
    gcloud config set compute/region $REGION
    ```
 2. Run the following command to enable the APIs for GKE, Cloud Build, Cloud Source Repositories and Container Analysis:
