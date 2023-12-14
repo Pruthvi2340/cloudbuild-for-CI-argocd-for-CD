@@ -108,3 +108,100 @@ env repository: contains the manifests for the Kubernetes Deployment
    git push google master
    ```
    * In the Cloud console, go to Cloud Build > Dashboard > and verify the cloud build is successfull
+
+# Task 5. Create the Test Environment and CD pipeline
+1. Cloud Build is also used for the continuous delivery pipeline.
+2. The pipeline runs each time a commit is pushed to the candidate branch of the hello-cloudbuild-env repository.
+3. The pipeline applies the new version of the manifest to the Kubernetes cluster and, if successful, copies the manifest over to the production branch.
+
+**This process has the following properties:**
+a. The candidate branch is a history of the deployment attempts.
+b.The production branch is a history of the successful deployments.
+c. You have a view of successful and failed deployments in Cloud Build.
+d. You can rollback to any previous deployment by re-executing the corresponding build in Cloud Build.
+e. A rollback also updates the production branch to truthfully reflect the history of deployments.
+
+**Grant Cloud Build access to GKE**
+
+1. application in your Kubernetes cluster, Cloud Build needs the Kubernetes Engine Developer Identity and Access Management role.
+   ```
+   PROJECT_NUMBER="$(gcloud projects describe ${PROJECT_ID} --format='get(projectNumber)')"
+   gcloud projects add-iam-policy-binding ${PROJECT_NUMBER} --member=serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com --role=roles/container.developer
+   ```
+**You need to initialize the hello-cloudbuild-env repository with two branches (production and candidate)**
+**Cloud Build configuration file describing the deployment process. The first step is to clone the hello-cloudbuild-env repository and create the production branch. It is still empty.**
+
+2. Initiate two branches
+   ```
+   cd ~
+   gcloud source repos clone hello-cloudbuild-env
+   cd ~/hello-cloudbuild-env
+   git checkout -b production
+   cd ~/hello-cloudbuild-env
+   cp ~/hello-cloudbuild-app/cloudbuild-delivery.yaml ~/hello-cloudbuild-env/cloudbuild.yaml
+   git add .
+   git commit -m "Create cloudbuild.yaml for deployment"
+   git checkout -b candidate
+   git push origin production
+   git push origin candidate
+   ```
+3. Grant the Source Repository Writer IAM role to the Cloud Build service account for the hello-cloudbuild-env repository:
+   ```
+   PROJECT_NUMBER="$(gcloud projects describe ${PROJECT_ID} \
+   --format='get(projectNumber)')"
+   cat >/tmp/hello-cloudbuild-env-policy.yaml <<EOF
+   bindings:
+   - members:
+     - serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com
+     role: roles/source.writer
+   EOF
+   ```
+   ```
+   gcloud source repos set-iam-policy \
+   hello-cloudbuild-env /tmp/hello-cloudbuild-env-policy.yaml
+   ```
+
+# Create the trigger for the continuous delivery pipeline
+1. In the Cloud console, go to Cloud Build > Triggers.
+2. Click Create Trigger.
+3. In the Name field, type hello-cloudbuild-deploy.
+4. Under Event, select Push to a branch.
+5. Under Source, select hello-cloudbuild-env as your Repository and ^candidate$ as your Branch.
+6. Under Build configuration, select Cloud Build configuration file.
+7. In the Cloud Build configuration file location field, type cloudbuild.yaml after the /.
+8. Click Create.
+
+# Copy the extended version of the cloudbuild.yaml file for the app repository and push to repository:
+```
+cd ~/hello-cloudbuild-app
+cp cloudbuild-trigger-cd.yaml cloudbuild.yaml
+cd ~/hello-cloudbuild-app
+git add cloudbuild.yaml
+git commit -m "Trigger CD pipeline"
+git push google master
+```
+
+# Task 6. Review Cloud Build Pipeline
+![image](https://github.com/Pruthvi2340/cloudbuild-for-CI-argocd-for-CD/assets/152501425/0b23a8cb-3624-4c03-8c90-8981f320e22a)
+
+# Task 7. Test the complete pipeline
+1. go to Kubernetes Engine > Services & Ingress and access with public ip in the browser.
+2. In Cloud Shell, replace "Hello World" with "Hello Cloud Build", both in the application and in the unit test:
+   ```
+   cd ~/hello-cloudbuild-app
+   sed -i 's/Hello World/Hello Cloud Build/g' app.py
+   sed -i 's/Hello World/Hello Cloud Build/g' test_app.py
+   ```
+3. Commit and push the change to Cloud Source Repositories:
+   ```
+   git add app.py test_app.py
+   git commit -m "Hello Cloud Build"
+   git push google master
+   ```
+
+# Task 8. Test the rollback
+
+1. In the Cloud console, go to Cloud Build > Dashboard.
+2. Click on View all link under Build History for the hello-cloudbuild-env repository.
+3. Click on the second most recent build available.
+4. Click Rebuild.
